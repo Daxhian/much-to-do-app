@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: muchtodo
+  labels:
+    app: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      # Init container writes a .env file to a shared volume so Viper can read it.
+      # Needed because Viper's Unmarshal() doesn't pick up env vars injected by k8s
+      # without AutomaticEnv() + BindEnv — it needs a physical .env file at /app/.env
+      initContainers:
+        - name: write-env
+          image: busybox
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              cat > /envdir/.env << ENVEOF
+              PORT=$(PORT)
+              DB_NAME=$(DB_NAME)
+              JWT_EXPIRATION_HOURS=$(JWT_EXPIRATION_HOURS)
+              ENABLE_CACHE=$(ENABLE_CACHE)
+              LOG_LEVEL=$(LOG_LEVEL)
+              LOG_FORMAT=$(LOG_FORMAT)
+              MONGO_URI=$(MONGO_URI)
+              JWT_SECRET_KEY=$(JWT_SECRET_KEY)
+              ENVEOF
+          envFrom:
+            - configMapRef:
+                name: backend-configmap
+          env:
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: mongo-uri
+            - name: JWT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backend-secret
+                  key: jwt-secret-key
+          volumeMounts:
+            - name: env-file
+              mountPath: /envdir
+      containers:
+        - name: backend
+          image: muchtodo-backend:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: env-file
+              mountPath: /app/.env
+              subPath: .env
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+      volumes:
+        - name: env-file
+          emptyDir: {}

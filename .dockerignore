@@ -1,0 +1,34 @@
+# Git
+.git
+.gitignore
+
+# Environment files (never bake secrets into image)
+.env
+.env.*
+!.env.example
+
+# Docs and evidence (not needed in image)
+docs/
+evidence/
+*.md
+
+# Kubernetes and scripts (not needed in image)
+kubernetes/
+scripts/
+
+# Test files
+*_test.go
+testdata/
+
+# OS / editor artifacts
+.DS_Store
+*.swp
+*.swo
+Thumbs.db
+
+# Build artifacts
+*.exe
+*.out
+/server
+
+
